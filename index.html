@@ -145,6 +145,25 @@ p{margin:0 0 8px}
 .cons .h{background:var(--line)}.cons .s{background:color-mix(in srgb,var(--down) 55%,var(--surface))}.cons .ss{background:var(--down)}
 .cons-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted);margin-bottom:6px}
 .claude p{max-width:62ch}
+.sec{font-size:19px;font-weight:600;margin:24px 4px 10px}
+.chart{width:100%;height:auto;display:block;margin:8px 0 6px;overflow:visible}
+.chart text{font-size:10px;fill:var(--muted);font-family:inherit}
+.chart-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.chart-legend i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:6px;vertical-align:2px}
+.callout{font-size:15px;margin:12px 0 0;max-width:60ch}
+.bars>div{display:grid;grid-template-columns:58px minmax(0,1fr) 46px;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.bar-pair{display:flex;flex-direction:column;gap:4px}
+.bar-track{height:7px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.bar-track span{display:block;height:100%;background:var(--accent);border-radius:4px}
+.bar-track span.w{background:var(--muted);opacity:.45}
+.bar-num{font-size:12px;text-align:right;line-height:1.35;color:var(--muted)}
+.bar-num b{color:var(--ink)}
+.heat-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.heat{display:grid;gap:2px;font-size:12px;min-width:min-content}
+.heat span{padding:8px 2px;text-align:center;border-radius:4px}
+.hh{color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hl{text-align:left!important;padding-left:0!important}
+.tab{font-size:11px}
 .mini div{display:flex;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:14px}
 .mini div span:last-child{margin-left:auto}
 
@@ -166,6 +185,7 @@ input:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border
 <nav class="tabs" aria-label="Navigation">
   <button class="tab" data-tab="portefeuille"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Portefeuille</button>
   <button class="tab" data-tab="signaux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-8M10 20V5M15 20v-6M20 20V9"/></svg>Signaux</button>
+  <button class="tab" data-tab="risque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>Risque</button>
   <button class="tab" data-tab="actus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9h10M7 13h10M7 17h6"/></svg>Actus</button>
   <button class="tab" data-tab="reglages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M19 6h1M4 12h3M13 12h7M4 18h11M21 18h-1"/><circle cx="16" cy="6" r="2.2"/><circle cx="10" cy="12" r="2.2"/><circle cx="18" cy="18" r="2.2"/></svg>Réglages</button>
 </nav>
@@ -226,14 +246,14 @@ const store={
   get(k,d){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){ toast('Stockage du téléphone plein : impossible d’enregistrer.'); } }
 };
-const DEFAULT_SETTINGS={finnhub:'',itick:'',anthropic:'',model:'claude-sonnet-5-5',rate:'',base:'AUD'};
+const DEFAULT_SETTINGS={finnhub:'',itick:'',twelve:'',anthropic:'',model:'claude-sonnet-5-5',rate:'',base:'AUD'};
 let positions=store.get('pf.positions',[]);
 let settings=Object.assign({},DEFAULT_SETTINGS,store.get('pf.settings',{}));
 let cache=store.get('pf.cache',{});
 (function prune(){ const now=Date.now(); for(const k in cache){ if(!cache[k]||now-cache[k].t>3*DAY) delete cache[k]; } })();
 let cacheTimer;
 function saveCache(){ clearTimeout(cacheTimer); cacheTimer=setTimeout(()=>{ try{ localStorage.setItem('pf.cache',JSON.stringify(cache)); }catch(e){ cache={}; try{localStorage.removeItem('pf.cache');}catch(_){} } },500); }
-function persist(){ store.set('pf.positions',positions); }
+function persist(){ store.set('pf.positions',positions); if(typeof risk!=='undefined') risk.port=null; }
 
 /* ---------- Appels API ---------- */
 class ApiError extends Error{ constructor(code,msg){ super(msg); this.code=code; } }
@@ -452,7 +472,7 @@ function valuation(p){
 function toBase(v,cur){
   if(!isNum(v)) return null;
   const b=settings.base; if(cur===b) return v;
-  const r=parseNumber(settings.rate); if(!isNum(r)||r<=0) return null;
+  let r=parseNumber(settings.rate); if(!isNum(r)||r<=0) r=autoRate; if(!isNum(r)||r<=0) return null;
   if(cur==='USD'&&b==='AUD') return v*r;
   if(cur==='AUD'&&b==='USD') return v/r;
   return null;
@@ -460,7 +480,7 @@ function toBase(v,cur){
 
 /* ---------- Vues ---------- */
 const state={tab:(location.hash||'#portefeuille').slice(1),newsTab:'mine',sheet:null};
-if(!['portefeuille','signaux','actus','reglages'].includes(state.tab)) state.tab='portefeuille';
+if(!['portefeuille','signaux','risque','actus','reglages'].includes(state.tab)) state.tab='portefeuille';
 
 function keyNotes(){
   const miss=[];
@@ -566,12 +586,13 @@ function viewSettings(){
     ${settingField('finnhub','Clé Finnhub (actions US, actus, analystes)','password')}
     ${settingField('itick','Clé iTick (actions ASX)','password')}
     ${settingField('anthropic','Clé Anthropic (facultatif, pour l’avis de Claude)','password')}
+    ${settingField('twelve','Clé Twelve Data (historique pour l’onglet Risque, taux USD/AUD)','password')}
     ${settingField('model','Modèle Claude','text','','claude-sonnet-5-5')}
   </div>
   <div class="block"><h3>Devises</h3>
     <div class="two"><label class="field"><span>Devise d’affichage</span><select data-setting="base"><option value="AUD" ${sel(settings.base,'AUD')}>AUD</option><option value="USD" ${sel(settings.base,'USD')}>USD</option></select></label>
-    ${settingField('rate','1 USD = ? AUD','text','decimal','ex. 1,52')}</div>
-    <p class="small muted" style="margin-top:8px">Mets le taux à jour de temps en temps pour que le total reste juste.</p>
+    ${settingField('rate','1 USD = ? AUD','text','decimal',autoRate?'Auto : '+fmtNum(autoRate,4):'ex. 1,52')}</div>
+    <p class="small muted" style="margin-top:8px">Laisse ce champ vide pour utiliser le taux automatique (clé Twelve Data). Sinon, mets-le à jour de temps en temps.</p>
   </div>
   <div class="block"><h3>Mes données</h3>
     <div class="actions" style="margin-top:0"><button class="btn" data-act="import">Importer un CSV</button><button class="btn" data-act="export">Sauvegarder mes lignes</button>
@@ -658,7 +679,7 @@ function detailHTML(p){
       :d.news&&d.news.length?d.news.map(newsItem).join('')
       :`<p class="small muted" style="padding:0 16px">${d.newsErr?esc(d.newsErr):'Aucune actu sur les 7 derniers jours.'}</p>`}</div>`;
   }
-  const actions=`<div class="actions"><button class="btn" data-act="edit" data-id="${p.id}">Modifier</button><button class="btn danger" data-act="delete" data-id="${p.id}">Supprimer</button></div>`;
+  const actions=`<div class="actions">${p.market==='US'?`<button class="btn" data-act="risk-open" data-sym="${esc(p.symbol)}">Voir le risque</button>`:''}<button class="btn" data-act="edit" data-id="${p.id}">Modifier</button><button class="btn danger" data-act="delete" data-id="${p.id}">Supprimer</button></div>`;
   return head+mine+app+analysts+ms+claude+indicators+newsBlock+actions;
 }
 
@@ -857,13 +878,338 @@ async function restoreBackup(file){
   }catch(e){ toast('Ce fichier n’est pas une sauvegarde valide.'); }
 }
 
+/* ---------- Risque : GARCH(1,1) et Monte Carlo ---------- */
+const HORIZONS=[[21,'1 mois'],[63,'3 mois'],[126,'6 mois'],[252,'1 an']];
+const hLabel=h=>(HORIZONS.find(x=>x[0]===h)||[0,h+' jours'])[1];
+const N_SIM=2000;
+const risk={horizon:63,hist:{},models:{},errs:{},single:{},port:null,portErr:null,loading:false,progress:'',wait:0,computing:false};
+let autoRate=(store.get('pf.fx',null)||{}).v||null;
+
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+/* Twelve Data : 8 requêtes par minute sur l'offre gratuite */
+const tdCalls=[];
+async function tdThrottle(){
+  for(;;){
+    const now=Date.now();
+    while(tdCalls.length&&now-tdCalls[0]>61000) tdCalls.shift();
+    if(tdCalls.length<8){ tdCalls.push(now); if(risk.wait){ risk.wait=0; render(); } return; }
+    risk.wait=Math.ceil((61000-(now-tdCalls[0]))/1000); render();
+    await new Promise(r=>setTimeout(r,1000));
+  }
+}
+async function twelve(path,params){
+  if(!settings.twelve) throw new ApiError('nokey','Ajoute ta clé Twelve Data dans Réglages.');
+  await tdThrottle();
+  let r;
+  try{ r=await fetch(`https://api.twelvedata.com${path}?${new URLSearchParams(Object.assign({},params,{apikey:settings.twelve}))}`); }
+  catch(e){ throw new ApiError('net','Twelve Data est injoignable. Vérifie ta connexion.'); }
+  let j=null; try{ j=await r.json(); }catch(_){}
+  if(!r.ok||!j||j.status==='error'){
+    const code=(j&&j.code)||r.status, msg=(j&&j.message)?' ('+j.message+')':'';
+    if(code===401||code===403) throw new ApiError('auth','Twelve Data refuse la clé ou l’accès'+msg+'.');
+    if(code===429) throw new ApiError('rate','Limite Twelve Data atteinte (8 requêtes par minute, 800 par jour). Réessaie plus tard.');
+    if(code===400||code===404) throw new ApiError('nodata','Twelve Data ne trouve pas ce symbole'+msg+'.');
+    throw new ApiError('http','Twelve Data a répondu une erreur '+code+msg+'.');
+  }
+  return j;
+}
+async function loadHistory(sym,force){
+  const key='pf.hist.'+sym, h=store.get(key,null);
+  if(!force&&h&&Date.now()-h.t<12*HOUR) return h;
+  try{
+    const j=await twelve('/time_series',{symbol:sym,interval:'1day',outputsize:750});
+    const rows=(j.values||[]).map(v=>[String(v.datetime).slice(0,10),parseFloat(v.close)]).filter(x=>isFinite(x[1])&&x[1]>0).sort((a,b)=>a[0]<b[0]?-1:1);
+    if(rows.length<120) throw new ApiError('nodata','Historique trop court pour '+sym+' ('+rows.length+' séances).');
+    const out={t:Date.now(),d:rows.map(x=>x[0]),c:rows.map(x=>x[1])};
+    store.set(key,out); return out;
+  }catch(e){ if(h&&e.code!=='auth') return h; throw e; }
+}
+async function loadFx(force){
+  if(!settings.twelve) return;
+  const c=store.get('pf.fx',null);
+  if(!force&&c&&Date.now()-c.t<6*HOUR){ autoRate=c.v; return; }
+  try{
+    const j=await twelve('/exchange_rate',{symbol:'USD/AUD'});
+    const v=parseFloat(j.rate);
+    if(isFinite(v)&&v>0){ autoRate=v; store.set('pf.fx',{t:Date.now(),v}); render(); }
+  }catch(e){}
+}
+
+/* Modèle GARCH(1,1) estimé par maximum de vraisemblance, avec ciblage de variance */
+function logReturns(c){ const r=new Float64Array(c.length-1); for(let i=1;i<c.length;i++) r[i-1]=Math.log(c[i]/c[i-1]); return r; }
+function garchFit(r){
+  const n=r.length; let mu=0; for(let i=0;i<n;i++) mu+=r[i]; mu/=n;
+  const e=new Float64Array(n); let v=0;
+  for(let i=0;i<n;i++){ e[i]=r[i]-mu; v+=e[i]*e[i]; }
+  v/=n; if(!(v>0)) v=1e-8;
+  const ll=(a,b)=>{
+    if(a<=0||b<0||a+b>=0.9995) return -Infinity;
+    const w=v*(1-a-b); let s2=v, L=0;
+    for(let i=0;i<n;i++){ L-=0.5*(Math.log(s2)+e[i]*e[i]/s2); s2=w+a*e[i]*e[i]+b*s2; }
+    return L;
+  };
+  let best={a:0.05,b:0.9,L:ll(0.05,0.9)};
+  for(let ai=1;ai<=30;ai++){ const a=ai/100; for(let bi=50;bi<=99;bi++){ const b=bi/100; if(a+b>=0.999) continue; const L=ll(a,b); if(L>best.L) best={a,b,L}; } }
+  let step=0.005;
+  for(let it=0;it<200&&step>1e-5;it++){
+    let improved=false;
+    for(const [da,db] of [[step,0],[-step,0],[0,step],[0,-step],[step,-step],[-step,step]]){
+      const a=best.a+da,b=best.b+db,L=ll(a,b);
+      if(L>best.L){ best={a,b,L}; improved=true; }
+    }
+    if(!improved) step/=2;
+  }
+  const a=best.a,b=best.b,w=v*(1-a-b);
+  const s2=new Float64Array(n+1); s2[0]=v;
+  for(let i=0;i<n;i++) s2[i+1]=w+a*e[i]*e[i]+b*s2[i];
+  const z=new Float64Array(n); for(let i=0;i<n;i++) z[i]=e[i]/Math.sqrt(s2[i]);
+  return {mu,a,b,w,v,s2,z,e,n};
+}
+const annVol=s2=>Math.sqrt(s2*252)*100;
+function garchForecast(m,h){ return m.v+Math.pow(m.a+m.b,h-1)*(m.s2[m.n]-m.v); }
+
+/* Monte Carlo : simulation historique filtrée (chocs réels du passé, rejoués avec la dynamique GARCH) */
+function simulate(models,qty,P0,fx,H,N,seed){
+  const k=models.length, n=models[0].n, rng=mulberry32(seed);
+  const step=Math.max(1,Math.round(H/60)), days=[];
+  for(let d=0;d<=H;d+=step) days.push(d);
+  if(days[days.length-1]!==H) days.push(H);
+  const S=days.length, buf=new Float32Array(N*S), term=new Float64Array(N), pnl=new Float64Array(N*k);
+  const Z=models.map(m=>{ let mu=0,v=0; for(let i=0;i<n;i++) mu+=m.z[i]; mu/=n; for(let i=0;i<n;i++) v+=(m.z[i]-mu)**2; v=Math.sqrt(v/n)||1; return Float64Array.from(m.z,x=>(x-mu)/v); });
+  let V0=0; for(let i=0;i<k;i++) V0+=qty[i]*P0[i]*fx;
+  const P=new Float64Array(k), s2=new Float64Array(k);
+  for(let p=0;p<N;p++){
+    for(let i=0;i<k;i++){ P[i]=P0[i]; s2[i]=models[i].s2[models[i].n]; }
+    buf[p*S]=V0; let si=1;
+    for(let t=1;t<=H;t++){
+      const idx=(rng()*n)|0;
+      for(let i=0;i<k;i++){ const m=models[i], e=Math.sqrt(s2[i])*Z[i][idx]; P[i]*=Math.exp(e); s2[i]=m.w+m.a*e*e+m.b*s2[i]; }
+      if(si<S&&t===days[si]){ let V=0; for(let i=0;i<k;i++) V+=qty[i]*P[i]*fx; buf[p*S+si]=V; si++; }
+    }
+    let V=0;
+    for(let i=0;i<k;i++){ const val=qty[i]*P[i]*fx; V+=val; pnl[p*k+i]=val-qty[i]*P0[i]*fx; }
+    term[p]=V;
+  }
+  return {days,S,buf,term,pnl,V0,k,N};
+}
+const pctOf=(s,p)=>s[Math.min(s.length-1,Math.max(0,Math.round(p*(s.length-1))))];
+function fanOf(sim){
+  const {N,S,buf}=sim, out={p5:[],p25:[],p50:[],p75:[],p95:[]}, col=new Float64Array(N);
+  for(let s=0;s<S;s++){
+    for(let p=0;p<N;p++) col[p]=buf[p*S+s];
+    col.sort();
+    out.p5.push(pctOf(col,.05)); out.p25.push(pctOf(col,.25)); out.p50.push(pctOf(col,.5)); out.p75.push(pctOf(col,.75)); out.p95.push(pctOf(col,.95));
+  }
+  return out;
+}
+function statsFrom(term,V0){
+  const s=Float64Array.from(term).sort(), p5=pctOf(s,.05);
+  let tail=0,c=0; for(const x of s){ if(x<=p5){ tail+=x; c++; } else break; }
+  const share=f=>{ let k=0; for(const x of s) if(f(x)) k++; return k/s.length*100; };
+  return {p5,p25:pctOf(s,.25),p50:pctOf(s,.5),p75:pctOf(s,.75),p95:pctOf(s,.95),
+    var95:Math.max(0,V0-p5),es95:Math.max(0,V0-(c?tail/c:p5)),
+    loss10:share(x=>x<V0*0.9),loss20:share(x=>x<V0*0.8)};
+}
+function contributions(sim){
+  const {N,k,pnl}=sim, tot=new Float64Array(N);
+  for(let p=0;p<N;p++){ let s=0; for(let i=0;i<k;i++) s+=pnl[p*k+i]; tot[p]=s; }
+  let mT=0; for(const x of tot) mT+=x; mT/=N;
+  let vT=0; for(const x of tot) vT+=(x-mT)**2;
+  const out=[];
+  for(let i=0;i<k;i++){
+    let m=0; for(let p=0;p<N;p++) m+=pnl[p*k+i]; m/=N;
+    let c=0; for(let p=0;p<N;p++) c+=(pnl[p*k+i]-m)*(tot[p]-mT);
+    out.push(vT>0?c/vT*100:0);
+  }
+  return out;
+}
+function corrMatrix(rets){
+  const k=rets.length, L=Math.min(252,rets[0].length), xs=rets.map(r=>r.subarray(r.length-L));
+  const mu=xs.map(x=>{ let s=0; for(const v of x) s+=v; return s/L; });
+  const sd=xs.map((x,i)=>{ let s=0; for(const v of x) s+=(v-mu[i])**2; return Math.sqrt(s/L)||1; });
+  const M=[];
+  for(let i=0;i<k;i++){ M.push([]); for(let j=0;j<k;j++){ let c=0; for(let t=0;t<L;t++) c+=(xs[i][t]-mu[i])*(xs[j][t]-mu[j]); M[i].push(c/L/sd[i]/sd[j]); } }
+  return M;
+}
+function livePrice(sym){ const p=positions.find(x=>x.market==='US'&&x.symbol===sym); const d=p&&data[p.id]; return d&&isNum(d.price)?d.price:null; }
+
+function computePortfolio(){
+  const qty={};
+  positions.filter(p=>p.market==='US').forEach(p=>{ qty[p.symbol]=(qty[p.symbol]||0)+p.qty; });
+  let syms=Object.keys(qty).filter(s=>risk.hist[s]&&risk.hist[s].c.length>=250);
+  const excluded=Object.keys(qty).filter(s=>!syms.includes(s));
+  if(!syms.length) return null;
+  let common;
+  for(;;){
+    const sets=syms.map(s=>new Set(risk.hist[s].d));
+    common=risk.hist[syms[0]].d.filter(d=>sets.every(x=>x.has(d)));
+    if(common.length>=250||syms.length===1) break;
+    syms.sort((a,b)=>risk.hist[b].d.length-risk.hist[a].d.length); excluded.push(syms.pop());
+  }
+  const aligned=syms.map(s=>{ const h=risk.hist[s], m=new Map(h.d.map((d,i)=>[d,h.c[i]])); return common.map(d=>m.get(d)); });
+  const rets=aligned.map(logReturns), fits=rets.map(garchFit);
+  const P0=syms.map((s,i)=>livePrice(s)??aligned[i][aligned[i].length-1]);
+  const fxv=toBase(1,'USD'), cur=fxv!=null?settings.base:'USD', fx=fxv??1;
+  const H=risk.horizon, sim=simulate(fits,syms.map(s=>qty[s]),P0,fx,H,N_SIM,7+H);
+  let m=0,v=0; const lr=Array.from(sim.term,x=>Math.log(x/sim.V0));
+  for(const x of lr) m+=x; m/=lr.length; for(const x of lr) v+=(x-m)**2;
+  return {syms,excluded,cur,V0:sim.V0,days:sim.days,fan:fanOf(sim),stats:statsFrom(sim.term,sim.V0),
+    contrib:contributions(sim),weights:syms.map((s,i)=>qty[s]*P0[i]*fx/sim.V0*100),
+    corr:syms.length>1?corrMatrix(rets):null,volAnn:Math.sqrt(v/lr.length)*Math.sqrt(252/H)*100,n:common.length};
+}
+function runPortfolio(){
+  if(risk.computing) return;
+  risk.computing=true; render();
+  setTimeout(()=>{
+    try{ risk.port=computePortfolio(); risk.portErr=null; }
+    catch(e){ risk.port=null; risk.portErr='Calcul impossible : '+e.message; }
+    risk.computing=false; render();
+  },30);
+}
+function singleFor(sym){
+  const key=sym+'|'+risk.horizon; if(risk.single[key]) return risk.single[key];
+  const m=risk.models[sym], h=risk.hist[sym]; if(!m) return null;
+  const P0=livePrice(sym)??h.c[h.c.length-1];
+  const sim=simulate([m],[1],[P0],1,risk.horizon,N_SIM,11+risk.horizon);
+  return risk.single[key]={P0,days:sim.days,fan:fanOf(sim),stats:statsFrom(sim.term,P0)};
+}
+async function ensureRisk(force){
+  if(!settings.twelve||risk.loading) return;
+  const syms=[...new Set(positions.filter(p=>p.market==='US').map(p=>p.symbol))];
+  const todo=syms.filter(s=>force||!risk.models[s]);
+  if(!todo.length){ if(!risk.port&&syms.length) runPortfolio(); return; }
+  risk.loading=true; risk.errs={}; render();
+  let i=0;
+  for(const s of todo){
+    i++; risk.progress=`Chargement de l’historique ${i}/${todo.length} : ${s}`; render();
+    try{ const h=await loadHistory(s,force); risk.hist[s]=h; risk.models[s]=garchFit(logReturns(h.c)); }
+    catch(e){ risk.errs[s]=e.message; if(['auth','nokey','rate'].includes(e.code)) break; }
+  }
+  risk.loading=false; risk.progress=''; risk.single={}; risk.port=null; render();
+  if(state.sheet&&state.sheet.type==='risk') renderSheet();
+  runPortfolio();
+}
+
+/* Graphiques */
+const fmtCompact=(v,cur)=>isNum(v)?nf({style:'currency',currency:cur,notation:'compact',maximumFractionDigits:1}).format(v):'';
+function fanSVG(days,f,V0,cur){
+  const W=340,H=190,pl=52,pr=8,pt=10,pb=22,D=days[days.length-1];
+  let lo=Math.min(...f.p5,V0), hi=Math.max(...f.p95,V0); const pad=(hi-lo)*0.06||V0*0.05; lo-=pad; hi+=pad;
+  const X=d=>(pl+d/D*(W-pl-pr)).toFixed(1), Y=v=>(pt+(1-(v-lo)/(hi-lo))*(H-pt-pb)).toFixed(1);
+  const pts=a=>days.map((d,i)=>`${X(d)},${Y(a[i])}`);
+  const band=(a,b)=>'M'+pts(a).join('L')+'L'+pts(b).reverse().join('L')+'Z';
+  const ticks=[lo+pad,(lo+hi)/2,hi-pad];
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Éventail des scénarios simulés">
+    ${ticks.map(v=>`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${(+Y(v)+3).toFixed(1)}" text-anchor="end">${esc(fmtCompact(v,cur))}</text>`).join('')}
+    <path d="${band(f.p95,f.p5)}" fill="var(--accent)" fill-opacity=".14"/>
+    <path d="${band(f.p75,f.p25)}" fill="var(--accent)" fill-opacity=".3"/>
+    <line x1="${pl}" x2="${W-pr}" y1="${Y(V0)}" y2="${Y(V0)}" stroke="var(--muted)" stroke-dasharray="3 3"/>
+    <polyline points="${pts(f.p50).join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <text x="${pl}" y="${H-6}">Aujourd’hui</text><text x="${W-pr}" y="${H-6}" text-anchor="end">dans ${hLabel(D)}</text>
+  </svg>`;
+}
+const fanLegend=()=>`<div class="chart-legend"><span><i style="background:var(--accent)"></i>Médiane</span><span><i style="background:var(--accent);opacity:.45"></i>50 % des scénarios</span><span><i style="background:var(--accent);opacity:.2"></i>90 % des scénarios</span><span><i style="background:var(--muted)"></i>Valeur actuelle</span></div>`;
+function volSVG(m){
+  const n=m.n, L=Math.min(252,n), F=30, W=340, H=180, pl=40, pr=8, pt=10, pb=22, T=L+F;
+  const cond=[], real=[], fc=[];
+  for(let i=n-L;i<n;i++){
+    cond.push(annVol(m.s2[i]));
+    const a=Math.max(0,i-20); let s=0; for(let j=a;j<=i;j++) s+=m.e[j]*m.e[j];
+    real.push(annVol(s/(i-a+1)));
+  }
+  for(let h=1;h<=F;h++) fc.push(annVol(garchForecast(m,h)));
+  const lr=annVol(m.v), hi=Math.max(...cond,...real,...fc,lr)*1.1;
+  const split=pl+(W-pl-pr)*0.78;
+  const X=i=>(i<L?pl+i/(L-1)*(split-pl):split+(i-L+1)/F*(W-pr-split)).toFixed(1), Y=v=>(pt+(1-v/hi)*(H-pt-pb)).toFixed(1);
+  const line=(arr,off)=>arr.map((v,i)=>`${X(i+off)},${Y(v)}`).join(' ');
+  const ticks=[0,hi/2,hi/1.1];
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Volatilité annualisée et prévision">
+    ${ticks.map(v=>`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${(+Y(v)+3).toFixed(1)}" text-anchor="end">${fmtNum(v,0)} %</text>`).join('')}
+    <line x1="${X(L-1)}" x2="${X(L-1)}" y1="${pt}" y2="${H-pb}" stroke="var(--line)" stroke-dasharray="2 3"/>
+    <line x1="${pl}" x2="${W-pr}" y1="${Y(lr)}" y2="${Y(lr)}" stroke="var(--au)" stroke-dasharray="4 3"/>
+    <polyline points="${line(real,0)}" fill="none" stroke="var(--muted)" stroke-opacity=".6" stroke-width="1.2"/>
+    <polyline points="${line(cond,0)}" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/>
+    <polyline points="${X(L-1)},${Y(cond[cond.length-1])} ${line(fc,L)}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    <text x="${pl}" y="${H-6}">${L>=250?'Il y a 1 an':'Il y a '+L+' séances'}</text><text x="${X(L-1)}" y="${H-6}" text-anchor="middle">Aujourd’hui</text><text x="${W-pr}" y="${H-6}" text-anchor="end">+30 j</text>
+  </svg>`;
+}
+function heatHTML(syms,M){
+  return `<div class="heat-wrap"><div class="heat" style="grid-template-columns:56px repeat(${syms.length},minmax(42px,1fr))"><span></span>${syms.map(s=>`<span class="hh">${esc(s)}</span>`).join('')}
+    ${syms.map((s,i)=>`<span class="hh hl">${esc(s)}</span>${M[i].map((v,j)=>{
+      const bg=i===j?'var(--surface-2)':v>=0?`color-mix(in srgb,var(--accent) ${Math.round(v*85)}%,var(--surface))`:`color-mix(in srgb,var(--down) ${Math.round(-v*85)}%,var(--surface))`;
+      return `<span class="hc" style="background:${bg};color:${Math.abs(v)>0.55&&i!==j?'var(--accent-ink)':'var(--ink)'}">${i===j?'':fmtNum(v,2)}</span>`; }).join('')}`).join('')}</div></div>`;
+}
+
+/* Vues */
+const pc=v=>Math.max(0,Math.min(100,v));
+function horizonSeg(){ return `<div class="seg" role="group" aria-label="Horizon de simulation">${HORIZONS.map(([h,l])=>`<button data-act="risk-h" data-v="${h}" aria-pressed="${risk.horizon===h}">${l}</button>`).join('')}</div>`; }
+function viewRisk(){
+  const head=`<div class="h-row"><h1>Risque</h1>${settings.twelve?`<button class="btn btn-icon ${risk.loading||risk.computing?'spin':''}" data-act="risk-refresh" aria-label="Recharger l’historique">${ICON.refresh}</button>`:''}</div>
+    <p class="lede">Volatilité GARCH(1,1) et simulations Monte Carlo à partir de l’historique de tes lignes US. Ces modèles mesurent le risque, ils ne prédisent pas le sens du marché.</p>`;
+  if(!settings.twelve) return head+`<div class="note note-warn">Ajoute une clé Twelve Data (gratuite) pour charger l’historique des cours.<button class="link" data-tab="reglages">Ouvrir les réglages</button></div>`;
+  const us=[...new Set(positions.filter(p=>p.market==='US').map(p=>p.symbol))];
+  if(!us.length) return head+`<div class="note">Ajoute au moins une ligne US pour lancer l’analyse.</div>`;
+  const hasAU=positions.some(p=>p.market==='AU');
+  const status=risk.loading?`<div class="note">${esc(risk.progress)}${risk.wait?`<br>Pause imposée par l’offre gratuite (8 requêtes par minute) : encore ${risk.wait} s.`:''}</div>`
+    :risk.computing?`<div class="note">Simulation de ${fmtQty(N_SIM)} scénarios…</div>`:'';
+  const errs=Object.entries(risk.errs).map(([s,e])=>`<div class="note note-warn"><b>${esc(s)}</b> : ${esc(e)}</div>`).join('')+(risk.portErr?`<div class="note note-warn">${esc(risk.portErr)}</div>`:'');
+  let port='';
+  const P=risk.port;
+  if(P){
+    const s=P.stats, c=P.cur, hl=hLabel(risk.horizon);
+    port=`<div class="block"><h3>Portefeuille</h3>
+      <p class="small muted">${fmtQty(N_SIM)} scénarios sur ${hl}, corrélations entre tes lignes comprises. Lignes : ${P.syms.map(esc).join(', ')}.${P.excluded.length?` Exclues faute d’historique suffisant : ${P.excluded.map(esc).join(', ')}.`:''}${hasAU?' Les lignes ASX ne sont pas incluses.':''}</p>
+      ${fanSVG(P.days,P.fan,P.V0,c)}${fanLegend()}
+      <p class="callout">Dans 95 % des scénarios, ta perte sur ${hl} ne dépasse pas <b>${fmtMoney(s.var95,c)}</b> (${fmtNum(s.var95/P.V0*100,1)} %). Dans les 5 % les plus défavorables, elle atteint en moyenne ${fmtMoney(s.es95,c)}.</p>
+      <dl class="kv" style="margin-top:14px">${kv('Valeur actuelle',fmtMoney(P.V0,c))}${kv('Scénario médian',fmtMoney(s.p50,c))}
+        ${kv('Défavorable (5 %)',`<span class="down">${fmtMoney(s.p5,c)}</span>`)}${kv('Favorable (95 %)',`<span class="up">${fmtMoney(s.p95,c)}</span>`)}
+        ${kv('Risque de perdre plus de 10 %',fmtNum(s.loss10,0)+' %')}${kv('Risque de perdre plus de 20 %',fmtNum(s.loss20,0)+' %')}
+        ${kv('Volatilité annuelle estimée',fmtNum(P.volAnn,1)+' %')}${kv('Historique commun',fmtQty(P.n)+' séances')}</dl></div>`;
+    if(P.syms.length>1){
+      port+=`<div class="block"><h3>Qui porte le risque</h3>
+        <p class="small muted">Le poids de chaque ligne dans la valeur, comparé à sa part dans le risque total. Une ligne dont la part de risque dépasse nettement son poids est plus volatile, ou plus liée au reste du portefeuille.</p>
+        <div class="bars">${P.syms.map((sym,i)=>`<div><b>${esc(sym)}</b><span class="bar-pair"><span class="bar-track"><span class="w" style="width:${pc(P.weights[i])}%"></span></span><span class="bar-track"><span style="width:${pc(P.contrib[i])}%"></span></span></span><span class="bar-num">${fmtNum(P.weights[i],0)} %<br><b>${fmtNum(P.contrib[i],0)} %</b></span></div>`).join('')}</div>
+        <div class="chart-legend" style="margin-top:8px"><span><i style="background:var(--muted);opacity:.45"></i>Poids</span><span><i style="background:var(--accent)"></i>Part du risque</span></div></div>
+        <div class="block"><h3>Corrélations</h3><p class="small muted">Sur la dernière année de séances. Proche de 1 : les deux titres bougent ensemble et se protègent peu l’un l’autre. Proche de 0 ou négatif : ils se compensent.</p>${heatHTML(P.syms,P.corr)}</div>`;
+    }
+  }
+  const rows=us.map(s=>{
+    const m=risk.models[s]; if(!m) return '';
+    const now=annVol(m.s2[m.n]), lr=annVol(m.v);
+    const txt=now>lr*1.1?'Plus agité que d’habitude':now<lr*0.9?'Plus calme que d’habitude':'Dans sa moyenne';
+    return `<button class="row" data-act="risk-open" data-sym="${esc(s)}" style="--mk:var(--us)"><span class="r-col"><b>${esc(s)}</b><small>${txt}</small></span><span class="r-col r-right"><b>${fmtNum(now,1)} %</b><small>long terme ${fmtNum(lr,1)} %</small></span></button>`;
+  }).join('');
+  return head+horizonSeg()+status+errs+port+(rows?`<h2 class="sec">Volatilité par titre</h2><div class="list">${rows}</div>`:'');
+}
+function riskHTML(sym){
+  const m=risk.models[sym];
+  const head=`<div class="d-head"><div><h2>${esc(sym)}</h2><p class="muted">Volatilité et scénarios</p></div><button class="btn btn-icon" data-act="close" aria-label="Fermer">${ICON.close}</button></div>`;
+  if(!m) return head+`<div class="note ${risk.errs[sym]?'note-warn':''}">${esc(risk.errs[sym]||(!settings.twelve?'Ajoute une clé Twelve Data dans Réglages pour charger l’historique.':risk.loading?risk.progress||'Chargement de l’historique…':'Historique pas encore chargé.'))}</div>`;
+  const now=annVol(m.s2[m.n]), lr=annVol(m.v), pers=m.a+m.b, half=Math.log(0.5)/Math.log(pers);
+  const sg=singleFor(sym), s=sg.stats, hl=hLabel(risk.horizon);
+  const level=now>lr*1.1?'au-dessus de sa moyenne de long terme : le modèle prévoit qu’elle redescende progressivement vers elle.':now<lr*0.9?'en dessous de sa moyenne de long terme : le modèle prévoit qu’elle remonte progressivement vers elle.':'proche de sa moyenne de long terme : le modèle prévoit qu’elle reste à peu près stable.';
+  const explain=`Avec une persistance de ${fmtNum(pers,2)}, un choc de volatilité met environ ${fmtNum(half,0)} séances à s’atténuer de moitié. La volatilité actuelle est ${level}`;
+  return head+`<div class="block"><h3>Volatilité annualisée</h3>${volSVG(m)}
+      <div class="chart-legend"><span><i style="background:var(--ink)"></i>GARCH</span><span><i style="background:var(--muted);opacity:.6"></i>Réalisée sur 21 jours</span><span><i style="background:var(--accent)"></i>Prévision</span><span><i style="background:var(--au)"></i>Moyenne long terme</span></div>
+      <dl class="kv" style="margin-top:14px">${kv('Volatilité actuelle',fmtNum(now,1)+' %')}${kv('Moyenne long terme',fmtNum(lr,1)+' %')}
+        ${kv('Persistance (α + β)',fmtNum(pers,3))}${kv('Demi-vie d’un choc',isFinite(half)?fmtNum(half,0)+' séances':'—')}
+        ${kv('Réaction aux chocs (α)',fmtNum(m.a,3))}${kv('Mémoire (β)',fmtNum(m.b,3))}</dl>
+      <p class="small muted" style="margin-top:12px">${explain}</p></div>
+    <div class="block"><h3>Scénarios sur ${hl}</h3>${horizonSeg()}${fanSVG(sg.days,sg.fan,sg.P0,'USD')}${fanLegend()}
+      <dl class="kv" style="margin-top:14px">${kv('Cours actuel',fmtMoney(sg.P0,'USD'))}${kv('Scénario médian',fmtMoney(s.p50,'USD'))}
+        ${kv('Défavorable (5 %)',`<span class="down">${fmtMoney(s.p5,'USD')}</span>`)}${kv('Favorable (95 %)',`<span class="up">${fmtMoney(s.p95,'USD')}</span>`)}
+        ${kv('Risque de baisse de plus de 10 %',fmtNum(s.loss10,0)+' %')}${kv('Risque de baisse de plus de 20 %',fmtNum(s.loss20,0)+' %')}</dl>
+      <p class="small muted" style="margin-top:12px">${fmtQty(N_SIM)} trajectoires simulées avec la dynamique GARCH, en rejouant les chocs réellement observés dans le passé (simulation historique filtrée). Hypothèse neutre : aucune tendance de fond n’est supposée.</p></div>`;
+}
+
 /* ---------- Rendu ---------- */
 let rq=0;
 function render(){ cancelAnimationFrame(rq); rq=requestAnimationFrame(doRender); }
 function doRender(){
   const v=$('#view');
   if(!(state.tab==='reglages'&&v.dataset.view==='reglages')){
-    v.innerHTML=state.tab==='portefeuille'?viewPortfolio():state.tab==='signaux'?viewSignals():state.tab==='actus'?viewNews():viewSettings();
+    v.innerHTML=state.tab==='portefeuille'?viewPortfolio():state.tab==='signaux'?viewSignals():state.tab==='risque'?viewRisk():state.tab==='actus'?viewNews():viewSettings();
     v.dataset.view=state.tab;
   }
   document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-current',t.dataset.tab===state.tab?'page':'false'));
@@ -876,6 +1222,7 @@ function renderSheet(fresh){
   if(s.type==='detail'){ const p=positions.find(x=>x.id===s.id); if(!p) return closeSheet(); html=detailHTML(p); }
   else if(s.type==='edit') html=editHTML(s.id);
   else if(s.type==='import') html=importHTML();
+  else if(s.type==='risk') html=riskHTML(s.sym);
   panel.innerHTML='<div class="grab"></div>'+html;
   sh.hidden=false; document.body.style.overflow='hidden';
   panel.scrollTop=fresh?0:st;
@@ -899,6 +1246,7 @@ document.addEventListener('click',e=>{
     state.tab=t.dataset.tab; history.replaceState(null,'','#'+state.tab);
     $('#view').dataset.view=''; closeSheet(); render(); window.scrollTo(0,0);
     if(state.tab==='actus') ensureNews();
+    if(state.tab==='risque') ensureRisk();
     return;
   }
   if(t.dataset.open){ openDetail(t.dataset.open); return; }
@@ -918,6 +1266,9 @@ document.addEventListener('click',e=>{
       break; }
     case 'news-tab': state.newsTab=t.dataset.v; render(); ensureNews(); break;
     case 'news-refresh': loadNews(state.newsTab,true); break;
+    case 'risk-open': openSheet({type:'risk',sym:t.dataset.sym}); ensureRisk(); break;
+    case 'risk-refresh': ensureRisk(true); break;
+    case 'risk-h': risk.horizon=+t.dataset.v; risk.single={}; risk.port=null; runPortfolio(); render(); if(state.sheet&&state.sheet.type==='risk') renderSheet(); break;
     case 'export': exportBackup(); break;
     case 'restore': $('#restore-file').click(); break;
     case 'wipe':
@@ -932,6 +1283,7 @@ document.addEventListener('change',e=>{
   const el=e.target;
   if(el.dataset&&el.dataset.setting){
     const k=el.dataset.setting; settings[k]=el.value.trim(); store.set('pf.settings',settings); toast('Réglages enregistrés');
+    if(k==='twelve'){ Object.assign(risk,{hist:{},models:{},errs:{},single:{},port:null}); loadFx(true); }
     if(k==='finnhub'||k==='itick'){ Object.keys(news).forEach(x=>{ if(x==='mine'||x==='market') news[x]=null; }); refreshAll(true); }
     return;
   }
@@ -945,6 +1297,8 @@ document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==
 /* ---------- Démarrage ---------- */
 render();
 refreshAll(false);
+loadFx();
+if(state.tab==='risque') ensureRisk();
 if(state.tab==='actus') ensureNews();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
