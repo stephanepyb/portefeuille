@@ -1,0 +1,23 @@
+PORTEFEUILLE - mise en ligne
+
+1. Clés gratuites
+   - Finnhub (actions US, actus, analystes) : crée un compte sur finnhub.io, la clé s'affiche dans ton tableau de bord.
+   - iTick (actions ASX) : crée un compte sur itick.org, puis génère un token dans le tableau de bord.
+   - Anthropic (facultatif, avis de Claude) : console.anthropic.com, facturé à l'usage.
+
+2. Mise en ligne gratuite (depuis un ordinateur, le plus simple)
+   - Décompresse ce dossier.
+   - Va sur app.netlify.com/drop et glisse le dossier entier dans la page.
+   - Crée un compte Netlify gratuit pour garder le site en ligne.
+   - Netlify te donne une adresse en https, à ouvrir sur ton téléphone.
+
+3. Installer sur le téléphone
+   - iPhone : ouvre l'adresse dans Safari, Partager, puis Sur l'écran d'accueil.
+   - Android : menu de Chrome, puis Installer l'application.
+
+4. Premier lancement
+   - Réglages : colle tes clés et le taux USD vers AUD.
+   - Portefeuille : ajoute tes lignes ou importe l'export CSV de CommSec.
+
+Tes clés et tes lignes restent stockées sur ton téléphone uniquement.
+Pense à utiliser Réglages > Sauvegarder mes lignes de temps en temps.

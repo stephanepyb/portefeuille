@@ -1,0 +1,16 @@
+{
+  "name": "Portefeuille",
+  "short_name": "Portefeuille",
+  "description": "Suivi de mes actions et ETF US et ASX, actus et signaux",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDF0F4",
+  "theme_color": "#2F45D0",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
