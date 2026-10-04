@@ -263,19 +263,40 @@ async function finnhub(path,params,ttl,force){
   },force);
 }
 
+const ITICK_HOSTS=['https://api.itick.org','https://api-free.itick.org'];
+async function itickOnce(host,path,qs){
+  let r;
+  try{ r=await limit(()=>fetch(`${host}${path}?${qs}`,{headers:{accept:'application/json',token:settings.itick}})); }
+  catch(e){ return {kind:'net'}; }
+  let j=null; try{ j=await r.json(); }catch(_){}
+  const msg=j&&j.msg?String(j.msg):'';
+  if(r.status===401) return {kind:'auth',status:401,msg};
+  if(r.status===403) return {kind:'plan',status:403,msg};
+  if(r.status===429) return {kind:'rate',status:429,msg};
+  if(!r.ok) return {kind:'http',status:r.status,msg};
+  if(!j||j.data==null) return {kind:/token|auth|key|permission|unauthor/i.test(msg)?'auth':'nodata',status:r.status,msg};
+  return {kind:'ok',data:j.data};
+}
 async function itick(path,params,ttl,force){
   if(!settings.itick) throw new ApiError('nokey','Ajoute ta clé iTick dans Réglages pour les cours ASX.');
   const qs=new URLSearchParams(params).toString();
   return cached('it'+path+'?'+qs,ttl,async()=>{
-    let r;
-    try{ r=await limit(()=>fetch(`https://api.itick.org${path}?${qs}`,{headers:{accept:'application/json',token:settings.itick}})); }
-    catch(e){ throw new ApiError('net','iTick est injoignable depuis le navigateur. Saisis un prix manuel sur la ligne en attendant.'); }
-    if(r.status===401||r.status===403) throw new ApiError('auth','iTick refuse la clé. Vérifie-la dans Réglages.');
-    if(r.status===429) throw new ApiError('rate','Limite iTick atteinte. Réessaie un peu plus tard.');
-    if(!r.ok) throw new ApiError('http','iTick a répondu une erreur '+r.status+'.');
-    const j=await r.json();
-    if(!j||j.data==null) throw new ApiError('nodata',(j&&j.msg)?'iTick : '+j.msg:'iTick ne renvoie aucune donnée pour ce symbole.');
-    return j.data;
+    const saved=store.get('pf.itickHost',null);
+    const hosts=saved?[saved,...ITICK_HOSTS.filter(h=>h!==saved)]:ITICK_HOSTS;
+    let first=null;
+    for(const h of hosts){
+      const res=await itickOnce(h,path,qs);
+      if(res.kind==='ok'){ if(saved!==h) store.set('pf.itickHost',h); return res.data; }
+      if(!first||first.kind==='net') first=res;
+      if(!['auth','plan','net'].includes(res.kind)) break;
+    }
+    const detail=first.msg?` (message d’iTick : ${first.msg})`:'';
+    if(first.kind==='auth') throw new ApiError('auth','iTick refuse la clé (erreur 401)'+detail+'. Vérifie que tu as copié le token complet, sans espace.');
+    if(first.kind==='plan') throw new ApiError('auth','iTick refuse l’accès (erreur 403)'+detail+'. Ton offre ne couvre peut-être pas les actions ASX.');
+    if(first.kind==='rate') throw new ApiError('rate','Limite iTick atteinte. Réessaie un peu plus tard.');
+    if(first.kind==='net') throw new ApiError('net','iTick est injoignable depuis le navigateur. Saisis un prix manuel sur la ligne en attendant.');
+    if(first.kind==='http') throw new ApiError('http','iTick a répondu une erreur '+first.status+detail+'.');
+    throw new ApiError('nodata',first.msg?'iTick : '+first.msg:'iTick ne renvoie aucune donnée pour ce symbole.');
   },force);
 }
 
