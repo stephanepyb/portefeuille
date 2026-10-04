@@ -841,9 +841,9 @@ let rq=0;
 function render(){ cancelAnimationFrame(rq); rq=requestAnimationFrame(doRender); }
 function doRender(){
   const v=$('#view');
-  if(!(state.tab==='reglages'&&v.dataset.tab==='reglages')){
+  if(!(state.tab==='reglages'&&v.dataset.view==='reglages')){
     v.innerHTML=state.tab==='portefeuille'?viewPortfolio():state.tab==='signaux'?viewSignals():state.tab==='actus'?viewNews():viewSettings();
-    v.dataset.tab=state.tab;
+    v.dataset.view=state.tab;
   }
   document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-current',t.dataset.tab===state.tab?'page':'false'));
 }
@@ -876,7 +876,7 @@ document.addEventListener('click',e=>{
   if(!t) return;
   if(t.dataset.tab){
     state.tab=t.dataset.tab; history.replaceState(null,'','#'+state.tab);
-    $('#view').dataset.tab=''; closeSheet(); render(); window.scrollTo(0,0);
+    $('#view').dataset.view=''; closeSheet(); render(); window.scrollTo(0,0);
     if(state.tab==='actus') ensureNews();
     return;
   }
